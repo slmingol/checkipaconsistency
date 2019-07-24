@@ -22,7 +22,7 @@
 set -eo pipefail
 IFS=$'\n'
 
-readonly APP_VER="1.3.0"
+readonly APP_VER="1.3.1"
 readonly APP_NAME="$(basename "$0")"
 readonly APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 readonly TMP_DIR="$(mktemp -d)"
@@ -35,7 +35,7 @@ declare BINDDN="cn=Directory Manager"
 declare BINDPW=""
 declare NAGIOSREPORT=""
 declare -i FIRST_COLUMN=20
-declare -i MIDDLE_COLUMNS=5
+declare -i MIDDLE_COLUMNS=16
 declare -i LAST_COLUMN=5
 declare -i NAGIOS=0
 declare WARNING=1
@@ -59,6 +59,10 @@ declare -A NAGIOSMSGS=( \
                         ['replica']='Replication Status' \
                       )
 declare -i CHECKS_NO=${#NAGIOSMSGS[@]}
+
+# Will display the hostname & the first level of the FQDN's domain. 
+#  - 1 will truncate, 0 will not. 
+declare -i TRUNCATE_DOMAIN=1
 
 die() {
   local msg="${1:-}"
@@ -308,7 +312,13 @@ display_header() {
 
   printf "%-${FIRST_COLUMN}s" "FreeIPA servers:"
   for server in "${SERVERS[@]}"; do
-    server="${server%%.*}"
+
+    if [ $TRUNCATE_DOMAIN -eq 1 ]; then
+    	server="$(echo ${server} | cut -d. -f1,2)"
+    else
+    	server="${server%%.*}"
+    fi
+
     printf "%-${MIDDLE_COLUMNS}s" "$server"
   done
   printf "%-${LAST_COLUMN}s\n" "STATE"
@@ -815,11 +825,11 @@ replication() {
     [[ $n -gt $max ]] && max=$n
   done
   for ((i=1; i<=max; i++)); do
-    [[ $i -eq 1 ]] && first_column="Replication Status" || first_column=""
+    [[ $i -eq 1 ]] && first_column="Replication Status" && printf "\n" || first_column=""
     printf "%-${FIRST_COLUMN}s" "$first_column"
     for server in "${SERVERS[@]}"; do
       if [[ -s "${dir}/${server}" ]]; then
-        line=$(sed -n '1p' "${dir}/${server}")
+        line=$(sed -n '1p' "${dir}/${server}" | sed 's/.[a-z0-9-]\+.[a-z0-9-]\+\s/ /')
         sed -i -e '1d' "${dir}/${server}"
       else
         line=""
